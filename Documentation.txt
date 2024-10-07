@@ -76,8 +76,10 @@ The first pass analyzes the assembly code to determine symbol addresses and calc
 The second pass translates assembly instructions into machine code, generating object code and assembly listings.
 Output Generation:
 
-Hosted Website link
-https://vercel.live/link/ss-assignment.vercel.app?via=deployment-domains-list&p=1
 Outputs are formatted for readability, showing the results of both passes and the final object program.
 Conclusion
 This Two Pass Assembler provides an interactive web-based environment for users to assemble simple assembly code into object code. It supports file uploads for both assembly code and the OPTAB, processes the input through two distinct passes, and displays comprehensive output, including an intermediate file, symbol table, program length, assembly listing, and object program. The structure is user-friendly, allowing for efficient operation and clear feedback on the assembler's processes.
+
+
+Hosted Website link:
+https://vercel.live/link/ss-assignment.vercel.app?via=deployment-domains-list&p=1
