@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM SOFTWARE ASSIGNMENT</title>
+    
+    <style>
+        body {
+            font-family: Arial, 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+            background-color: #010ec077;
+            color: #ecf0f1;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 70%;
+            margin: 30px auto;
+            padding: 20px;
+            background-color: #000000c4;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            color: #ecf0f1;
+        }
+
+        h2 {
+            text-align: center;
+            color: #ff0000;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        textarea, input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #1abc9c;
+            background-color: #ecf0f1;
+            color: #2c3e50;
+            font-size: 14px;
+            resize: none;
+        }
+
+        textarea[readonly] {
+            background-color: #eaeaea;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #1abc9c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #f80000;
+        }
+
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        textarea::placeholder {
+            color: #7f8c8d;
+        }
+
+        #output, #symtabOutput, #assemblyListing, #objectProgram {
+            background-color: #ecf0f1;
+            color: #000000;
+            height: 100px;
+        }
+
+        #optabFile, #inputFile {
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            font-size: 0.9em;
+            color: #bdc3c7;
+        }
+
+        .button-group {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Two Pass Assembler</h2>
+
+    <!-- OPTAB Input -->
+    <label for="optab">OPTAB:</label>
+    <textarea id="optab" placeholder="Enter the OPTAB manually or upload a file"></textarea>
+    <label for="optabFile" class="file-input-label">Upload OPTAB File (.txt):</label>
+    <input type="file" id="optabFile" accept=".txt">
+
+    <!-- Assembly Input -->
+    <label for="assembly-input">INPUT CODE:</label>
+    <textarea id="assembly-input" placeholder="Enter the assembly code manually or upload a file"></textarea>
+    <label for="inputFile" class="file-input-label">Upload Assembly Code File (.txt):</label>
+    <input type="file" id="inputFile" accept=".txt">
+
+    <!-- Buttons for Pass 1, Pass 2, and Reset -->
+    <div class="button-group">
+        <button id="pass1Button">Pass 1</button>
+        <button id="pass2Button" disabled>Pass 2</button>
+        <button id="resetButton">Reset</button>
+    </div>
+
+    <!-- Output Textareas -->
+    <label for="output">Intermediate File (Pass 1 Output):</label>
+    <textarea id="output" readonly></textarea>
+
+    <!-- SYMTAB Output -->
+    <label for="symtabOutput">SYMTAB (Symbol Table - Pass 1):</label>
+    <textarea id="symtabOutput" readonly></textarea>
+
+    <!-- Program Length Output -->
+    <label for="programLengthOutput">Program Length:</label>
+    <textarea id="programLengthOutput" readonly></textarea>
+
+    <!-- Assembly Listing Output -->
+    <label for="assemblyListing">Assembly Listing (Pass 2 Output):</label>
+    <textarea id="assemblyListing" readonly></textarea>
+
+    <!-- Object Program Output -->
+    <label for="objectProgram">Object Program:</label>
+    <textarea id="objectProgram" readonly></textarea>
+
+</div>
+
+<script>
+    let inputFileContent = '';
+    let optabFileContent = '';
+    let symtab = {};
+    let locctr = 0;
+    let start = 0;
+    let objectProgram = '';
+    let programLength = 0; // Variable to store program length
+
+    // Load Assembly Input File
+    document.getElementById('inputFile').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                inputFileContent = e.target.result;
+                document.getElementById('assembly-input').value = inputFileContent; // Populate textarea
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    // Load OPTAB File
+    document.getElementById('optabFile').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                optabFileContent = e.target.result;
+                document.getElementById('optab').value = optabFileContent; // Populate textarea
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    // Parse OPTAB into an object
+    function parseOptab(content) {
+        const optab = {};
+        const lines = content.trim().split('\n');
+        for (const line of lines) {
+            const [mnemonic, opcode] = line.trim().split(/\s+/);
+            if (mnemonic && opcode) {
+                optab[mnemonic] = opcode;
+            }
+        }
+        return optab;
+    }
+
+    // Run Pass 1
+    document.getElementById('pass1Button').addEventListener('click', function() {
+        if (!inputFileContent || !optabFileContent) {
+            alert("Please provide both assembly code and OPTAB.");
+            return;
+        }
+
+        const optab = parseOptab(optabFileContent);
+        const lines = inputFileContent.trim().split('\n');
+        let output = '';
+        let symtabOutput = '';
+        symtab = {};  // Clear symtab for a fresh run
+        locctr = 0;  // Reset location counter
+        programLength = 0; // Reset program length
+
+        for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length < 2) continue; // Skip empty or invalid lines
+
+            const label = parts.length === 3 ? parts[0] : '';
+            const mnemonic = parts.length === 3 ? parts[1] : parts[0];
+            const operand = parts.length === 3 ? parts[2] : parts[1];
+
+            if (mnemonic === 'START') {
+                start = parseInt(operand, 16);
+                locctr = start;
+                output += `\t${label}\t${mnemonic}\t${operand}\n`;
+            } else if (mnemonic === 'END') {
+                output += `${locctr.toString(16).toUpperCase()}\t${label}\t${mnemonic}\t${operand}\n`;
+                programLength = locctr - start; // Calculate program length
+                break;
+            } else {
+                output += `${locctr.toString(16).toUpperCase()}\t${label}\t${mnemonic}\t${operand}\n`;
+
+                // Add to SYMTAB
+                if (label && !symtab[label]) {
+                    symtab[label] = locctr.toString(16).toUpperCase().padStart(4, '0');
+                }
+
+                // Update locctr based on instruction type
+                if (optab[mnemonic]) {
+                    locctr += 3;
+                } else if (mnemonic === 'WORD') {
+                    locctr += 3;
+                } else if (mnemonic === 'RESW') {
+                    locctr += parseInt(operand) * 3;
+                } else if (mnemonic === 'BYTE') {
+                    locctr += operand.length - 3; // Adjust for actual byte length
+                } else if (mnemonic === 'RESB') {
+                    locctr += parseInt(operand);
+                }
+            }
+        }
+
+        // Generate SYMTAB output
+        for (const [label, address] of Object.entries(symtab)) {
+            symtabOutput += `${label}\t${address}\n`;
+        }
+
+        // Display outputs
+        document.getElementById('output').value = output;
+        document.getElementById('symtabOutput').value = symtabOutput;
+        document.getElementById('programLengthOutput').value = programLength.toString(16).padStart(4, '0'); // Display program length
+        document.getElementById('pass2Button').disabled = false; // Enable Pass 2 button
+    });
+
+    // Run Pass 2
+    document.getElementById('pass2Button').addEventListener('click', function() {
+        if (!inputFileContent || !optabFileContent) {
+            alert("Please provide both assembly code and OPTAB.");
+            return;
+        }
+
+        const optab = parseOptab(optabFileContent);
+        const lines = inputFileContent.trim().split('\n');
+        let assemblyListing = '';
+        objectProgram = ''; // Reset object program
+        let textRecord = '';
+        let currentTextAddress = '';
+        let currentTextLength = 0; // To keep track of the length of text record
+
+        locctr = start;  // Reset locctr to start value
+
+        for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length < 2) continue;
+
+            const label = parts.length === 3 ? parts[0] : '';
+            const mnemonic = parts.length === 3 ? parts[1] : parts[0];
+            const operand = parts.length === 3 ? parts[2] : parts[1];
+            let objectCode = '';
+
+            if (mnemonic === 'START') {
+                assemblyListing += `${locctr.toString(16).toUpperCase()}\t${label}\t${mnemonic}\t${operand}\n`;
+                // Header Record generation (corrected)
+                const headerLength = (programLength).toString(16).padStart(6, '0'); // Length in bytes
+                objectProgram += `^H${label.padEnd(6, ' ')}${start.toString(16).padStart(6, '0')}${headerLength}\n`; // Fixed formatting
+            } else if (mnemonic === 'END') {
+                assemblyListing += `${locctr.toString(16).toUpperCase()}\t${label}\t${mnemonic}\t${operand}\n`;
+                // Generate End Record with indentation
+                objectProgram += `^E${start.toString(16).padStart(6, '0')}\n`;
+                break;
+            } else {
+                if (optab[mnemonic]) {
+                    const opcode = optab[mnemonic];
+                    const address = symtab[operand] || '0000';
+                    objectCode = `${opcode}${address}`;
+                } else if (mnemonic === 'BYTE') {
+                    const byteVal = operand.slice(2, -1); // Extract constant
+                    objectCode = byteVal.toUpperCase();
+                } else if (mnemonic === 'WORD') {
+                    objectCode = parseInt(operand).toString(16).toUpperCase().padStart(6, '0');
+                }
+
+                assemblyListing += `${locctr.toString(16).toUpperCase()}\t${label}\t${mnemonic}\t${operand}\t${objectCode}\n`;
+
+                // Generate Text Record with indentation
+                if (objectCode) {
+                    if (textRecord === '') {
+                        currentTextAddress = locctr.toString(16).padStart(6, '0');
+                        textRecord += `^T${currentTextAddress}`;
+                    }
+
+                    textRecord += `${objectCode}`;
+                    currentTextLength += objectCode.length / 2; // Each object code is 2 hex digits
+                }
+
+                // Update locctr for next line
+                if (optab[mnemonic]) {
+                    locctr += 3;
+                } else if (mnemonic === 'WORD') {
+                    locctr += 3;
+                } else if (mnemonic === 'RESW') {
+                    locctr += parseInt(operand) * 3;
+                } else if (mnemonic === 'BYTE') {
+                    locctr += operand.length - 3;
+                } else if (mnemonic === 'RESB') {
+                    locctr += parseInt(operand);
+                }
+            }
+        }
+
+        // Finalize Text Record if it was created
+        if (textRecord !== '') {
+            const length = (currentTextLength * 2).toString(16).padStart(2, '0'); // Length in bytes
+            textRecord = textRecord.substring(0, 9) + length + textRecord.substring(9); // Insert length
+            objectProgram += textRecord + '\n'; // Append to object program
+        }
+
+        // Display Assembly Listing and Object Program
+        document.getElementById('assemblyListing').value = assemblyListing;
+        document.getElementById('objectProgram').value = objectProgram;
+    });
+
+// ... (rest of the code remains unchanged)
+
+    // Reset All Fields
+    document.getElementById('resetButton').addEventListener('click', function() {
+        document.getElementById('optab').value = '';
+        document.getElementById('assembly-input').value = '';
+        document.getElementById('output').value = '';
+        document.getElementById('symtabOutput').value = '';
+        document.getElementById('programLengthOutput').value = '';
+        document.getElementById('assemblyListing').value = '';
+        document.getElementById('objectProgram').value = '';
+        document.getElementById('optabFile').value = '';
+        document.getElementById('inputFile').value = '';
+        document.getElementById('pass2Button').disabled = true;
+
+        // Clear all variables
+        inputFileContent = '';
+        optabFileContent = '';
+        symtab = {};
+        locctr = 0;
+        start = 0;
+        objectProgram = '';
+        programLength = 0; // Reset program length
+    });
+</script>
+
+</body>
+</html>
